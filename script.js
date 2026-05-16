@@ -1,3 +1,4 @@
+window.onload = function() {
 const videoElement = document.getElementById('input_video');
 const canvasElement = document.getElementById('output_canvas');
 const canvasCtx = canvasElement.getContext('2d');
@@ -99,3 +100,5 @@ const camera = new Camera(videoElement, {
   height: 480
 });
 camera.start();
+
+};
