@@ -1,33 +1,37 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <meta charset="utf-8">
-  <title>Web vPPG - MediaPipe</title>
-  <!-- MediaPipe Libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  
-  <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a1a; color: white; text-align: center; }
-    .container { position: relative; display: inline-block; margin-top: 20px; }
-    #output_canvas { border-radius: 10px; border: 3px solid #444; }
-    .overlay { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; text-align: left; }
-    .bpm-value { font-size: 2em; color: #00ff00; font-weight: bold; }
-  </style>
+    <meta charset="UTF-8">
+    <title>vPPG OpenCV.js Terbaik</title>
+    <!-- Memanggil OpenCV.js Resmi -->
+    <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript" id="opencv-js"></script>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; }
+        .box { position: relative; display: inline-block; margin-top: 15px; }
+        canvas { border: 3px solid #333; border-radius: 8px; background: #000; }
+        .dashboard { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; text-align: left; border-radius: 5px; }
+        #bpm { font-size: 24px; color: #00ff00; font-weight: bold; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; cursor: pointer; }
+    </style>
 </head>
 <body>
-  <h1>vPPG Heart Rate Monitor</h1>
-  <div class="container">
-    <video id="input_video" style="display:none"></video>
-    <canvas id="output_canvas" width="640" height="480"></canvas>
-    
-    <div class="overlay">
-      <div id="bpm_text">BPM: <span class="bpm-value">--</span></div>
-      <div id="status">Status: Menunggu Kamera...</div>
-    </div>
-  </div>
 
-  <script src="script.js"></script>
+    <h2>vPPG Monitor - OpenCV.js Edition</h2>
+    <p id="loading-status">Mengunduh OpenCV.js (Mohon Tunggu...)</p>
+    <button id="start-btn" disabled>Buka Kamera & Mulai</button>
+    <br>
+    
+    <div class="box">
+        <!-- Video disembunyikan, kita murni menggambar di Canvas -->
+        <video id="videoInput" width="640" height="480" style="display:none;" loop playsinline></video>
+        <canvas id="canvasOutput" width="640" height="480"></canvas>
+        
+        <div class="dashboard">
+            <div id="bpm">BPM: Stabilizing...</div>
+            <div id="info">Status: Menunggu klik mulai...</div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
