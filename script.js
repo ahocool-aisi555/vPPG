@@ -1,75 +1,101 @@
-let video = document.getElementById('videoInput');
-let canvasFrame = document.getElementById('canvasOutput');
-let context = canvasFrame.getContext('2d');
+const videoElement = document.getElementById('input_video');
+const canvasElement = document.getElementById('output_canvas');
+const canvasCtx = canvasElement.getContext('2d');
+const bpmDisplay = document.querySelector('.bpm-value');
+const statusDisplay = document.getElementById('status');
+
 let rgb_buffer = [];
-const BUFFER_SIZE = 150; // Versi cepat (5 detik)
+const BUFFER_SIZE = 150; // Sekitar 5 detik data
 
-// Memulai Kamera
-navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-    .then(function(stream) {
-        video.srcObject = stream;
-        video.play();
-        startProcessing();
-    })
-    .catch(function(err) {
-        console.log("An error occurred! " + err);
-    });
+function onResults(results) {
+  canvasCtx.save();
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-function startProcessing() {
-    let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-    let gray = new cv.Mat();
-    let cap = new cv.VideoCapture(video);
-    let faces = new cv.RectVector();
-    let classifier = new cv.CascadeClassifier();
+  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+    const landmarks = results.multiFaceLandmarks[0];
+    statusDisplay.innerText = "Status: Wajah Terdeteksi";
 
-    // Memuat Haar Cascade (Membutuhkan file XML di direktori yang sama atau via URL)
-    let utils = new Utils('error-message');
-    utils.createFileFromUrl('haarcascade_frontalface_default.xml', 'https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml', () => {
-        classifier.load('haarcascade_frontalface_default.xml');
-        document.getElementById('status').innerText = "Ready";
-        processVideo();
-    });
+    // Titik Landmark 10 adalah Dahi Tengah
+    // Titik 151 dan 9 adalah batas vertikal dahi
+    const dahi = landmarks[10];
+    
+    // Konversi koordinat normalisasi ke pixel
+    const x = dahi.x * canvasElement.width;
+    const y = dahi.y * canvasElement.height;
 
-    function processVideo() {
-        try {
-            cap.read(src);
-            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-            classifier.detectMultiScale(gray, faces, 1.1, 3, 0);
-
-            for (let i = 0; i < faces.size(); ++i) {
-                let face = faces.get(i);
-                // ROI Dahi (estimasi koordinat)
-                let roiX = face.x + (face.width * 0.35);
-                let roiY = face.y + (face.height * 0.1);
-                let roiW = face.width * 0.3;
-                let roiH = face.height * 0.15;
-
-                // Gambar Kotak
-                cv.rectangle(src, new cv.Point(face.x, face.y), new cv.Point(face.x + face.width, face.y + face.height), [255, 0, 0, 255]);
-                cv.rectangle(src, new cv.Point(roiX, roiY), new cv.Point(roiX + roiW, roiY + roiH), [0, 255, 0, 255]);
-
-                // Ekstraksi Warna Rata-rata (Metode Sederhana untuk JS)
-                let rect = new cv.Rect(roiX, roiY, roiW, roiH);
-                let roiMat = src.roi(rect);
-                let mean = cv.mean(roiMat); // RGBA
-                rgb_buffer.push(mean[0]); // Ambil kanal Red (sebagai dasar vPPG simpel)
-                roiMat.delete();
-
-                if (rgb_buffer.length > BUFFER_SIZE) {
-                    rgb_buffer.shift();
-                    calculateBPM();
-                }
-            }
-            cv.imshow('canvasOutput', src);
-            requestAnimationFrame(processVideo);
-        } catch (err) {
-            console.error(err);
-        }
+    // Ambil sample warna di sekitar dahi (kotak 20x20 pixel)
+    const pixelData = canvasCtx.getImageData(x - 10, y - 10, 20, 20).data;
+    
+    let rSum = 0, gSum = 0, bSum = 0;
+    for (let i = 0; i < pixelData.length; i += 4) {
+      rSum += pixelData[i];
+      gSum += pixelData[i+1];
+      bSum += pixelData[i+2];
     }
+    
+    const rAvg = rSum / (pixelData.length / 4);
+    const gAvg = gSum / (pixelData.length / 4);
+    const bAvg = bSum / (pixelData.length / 4);
+
+    rgb_buffer.push({r: rAvg, g: gAvg, b: bAvg});
+
+    // Visualisasi area deteksi
+    canvasCtx.strokeStyle = "#00ff00";
+    canvasCtx.strokeRect(x - 10, y - 10, 20, 20);
+
+    if (rgb_buffer.length > BUFFER_SIZE) {
+      rgb_buffer.shift();
+      calculateBPM();
+    } else {
+      const progress = Math.round((rgb_buffer.length / BUFFER_SIZE) * 100);
+      bpmDisplay.innerText = `${progress}%`;
+    }
+  } else {
+    statusDisplay.innerText = "Status: Cari Wajah...";
+  }
+  canvasCtx.restore();
 }
 
 function calculateBPM() {
-    // Di sini Anda bisa mengimplementasikan FFT sederhana menggunakan library dsp.js 
-    // atau hitung manual Peak-to-Peak untuk versi Web yang ringan.
-    document.getElementById('bpmDisplay').innerText = "Processing...";
+  // Logika sederhana: Hitung Zero-Crossing atau Peak-to-Peak pada kanal Green
+  // Karena Green channel memiliki kontras sinyal vPPG paling kuat
+  const greenSinyal = rgb_buffer.map(d => d.g);
+  
+  // Deteksi puncak sederhana (Peak Detection)
+  let peaks = 0;
+  for (let i = 1; i < greenSinyal.length - 1; i++) {
+    if (greenSinyal[i] > greenSinyal[i-1] && greenSinyal[i] > greenSinyal[i+1]) {
+      peaks++;
+    }
+  }
+  
+  // Estimasi BPM (Sangat dasar, sebaiknya gunakan FFT untuk produksi)
+  const durationInSeconds = BUFFER_SIZE / 30; // Asumsi 30 FPS
+  const bpm = (peaks / durationInSeconds) * 60 / 2; // Dibagi 2 karena biasanya ada noise puncak ganda
+  
+  if(bpm > 40 && bpm < 180) {
+    bpmDisplay.innerText = Math.round(bpm);
+  }
 }
+
+const faceMesh = new FaceMesh({locateFile: (file) => {
+  return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+}});
+
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+faceMesh.onResults(onResults);
+
+const camera = new Camera(videoElement, {
+  onFrame: async () => {
+    await faceMesh.send({image: videoElement});
+  },
+  width: 640,
+  height: 480
+});
+camera.start();
